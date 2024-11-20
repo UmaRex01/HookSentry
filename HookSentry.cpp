@@ -3,6 +3,8 @@
 #include <capstone.h>
 #include <stdio.h>
 
+#pragma comment(lib, "capstone.lib")
+
 #define MAX_SUMMARY_TABLE_SIZE 100
 #define SYSTEM_DLL_PATH L"c:\\windows\\system32"
 #define RVA2VA(TYPE, BASE, RVA) (TYPE)((ULONG_PTR)BASE + RVA)
