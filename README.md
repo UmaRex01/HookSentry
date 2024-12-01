@@ -1,15 +1,25 @@
 # HookSentry
-HookSentry is a quick & dirty tool designed to inspect system DLLs loaded into a Windows process. It checks for potential hooks in system libraries and displays detailed information about any discovered hooks. The tool compares the in-memory image of each DLL to its on-disk version, identifies functions that have been hooked, and prints disassembled code to help analyze the changes.
+HookSentry is a quick & dirty tool designed to inspect system DLLs loaded into a Windows process.
+
+It checks for potential hooks in system libraries and displays detailed information about any discovered hooks. The tool compares the in-memory image of each DLL to its on-disk version, identifies functions that have been hooked, and prints disassembled code to help analyze the changes.
 
 **The tool is only compatible with x64 systems.**
 
+## Usage
+Just run the executable. You only need to enter one thing – the PID (Process ID) of a remote process. If you do, the program will check the hooks in the process that matches the PID you've given it. Otherwise, it'll check the hooks in its own process.
+
+```cmd
+C:\Users\user\Desktop>.\HookSentry.exe <PID>
+```
+
+## Example
 ```cmd
 C:\Users\user\Desktop>.\HookSentry.exe
 
 |_| _  _ | (~ _  _ _|_ _
 | |(_)(_)|<_)(/_| | | |\/
                       /
-V0.1 - 2024 - @UmaRex01
+V0.2 - 2024 - @UmaRex01
 
 
 WORKING ON: C:\Windows\SYSTEM32\ntdll.dll
