@@ -1,19 +1,23 @@
+#include "SummaryTable.h"
+#include "CsUtils.h"
 #include <windows.h>
 #include <winternl.h>
-#include <capstone.h>
+#include <wchar.h>
 #include <stdio.h>
+#include <psapi.h>
 
 #pragma comment(lib, "ntdll")
-#pragma comment(lib, "capstone.lib")
+#pragma comment(lib, "psapi")
 
-#define MAX_SUMMARY_TABLE_SIZE 1000
 #define SYSTEM_DLL_PATH L"c:\\windows\\system32"
 #define RVA2VA(TYPE, BASE, RVA) (TYPE)((ULONG_PTR)BASE + RVA)
 
-typedef struct SUMMARY_TABLE {
-	PWSTR DllFullPath;
-	INT HookCount;
-} SUMMARY_TABLE, * PSUMMARY_TABLE;
+#define print_verbose(verbose, ...) \
+	do { \
+		if(verbose) { \
+			wprintf(__VA_ARGS__); \
+		} \
+	} while(0) \
 
 static DWORD RvaToFileOffset(PIMAGE_NT_HEADERS ntHeaders, DWORD rva)
 {
@@ -28,50 +32,7 @@ static DWORD RvaToFileOffset(PIMAGE_NT_HEADERS ntHeaders, DWORD rva)
 	return 0;
 }
 
-static void PrintDisasm(PVOID startAddr, SIZE_T size, DWORD64 vaAddr)
-{
-	csh csHandle;
-	cs_insn* insn;
-	size_t count;
-
-	if (cs_open(CS_ARCH_X86, CS_MODE_64, &csHandle) != CS_ERR_OK)
-	{
-		printf("Capstone initialization failed.\n");
-		return;
-	}
-
-	count = cs_disasm(csHandle, (BYTE*)startAddr, size, vaAddr, 0, &insn);
-	if (count > 0)
-	{
-		for (size_t j = 0; j < count; j++)
-			printf("\t\t0x%llX:\t%s\t\t%s\n", insn[j].address, insn[j].mnemonic, insn[j].op_str);
-
-		cs_free(insn, count);
-	}
-	else
-	{
-		printf("\t\t(ERROR: Failed to disassemble given code!)\n\n\t\t");
-		for (int i = 0; i <= size; i++)
-			printf("%02X", *((PBYTE)startAddr + i));
-		printf("\n");
-	}
-
-	cs_close(&csHandle);
-}
-
-static void PrintSummaryTable(PSUMMARY_TABLE* table, DWORD count)
-{
-	printf("*** SUMMARY ***\n\n");
-	for (DWORD i = 0; i < count; i++)
-	{
-		SUMMARY_TABLE row = *table[i];
-		if (row.HookCount == -1)
-			wprintf(L"%s skipped.\n", row.DllFullPath);
-		else
-			wprintf(L"%s contains %d hooks\n", row.DllFullPath, row.HookCount);
-	}
-}
-
+// Reads the loader data from the process memor
 static void ReadLdrData(PPEB peb, HANDLE remoteProcess, PEB_LDR_DATA* ldr)
 {
 	if (remoteProcess != NULL)
@@ -80,6 +41,7 @@ static void ReadLdrData(PPEB peb, HANDLE remoteProcess, PEB_LDR_DATA* ldr)
 		*ldr = *(PEB_LDR_DATA*)(peb->Ldr);
 }
 
+// Reads a loader entry from the process memory
 static void ReadLdrEntry(HANDLE remoteProcess, PEB_LDR_DATA ldr, LDR_DATA_TABLE_ENTRY* ldrEntry)
 {
 	if (remoteProcess != NULL)
@@ -88,6 +50,7 @@ static void ReadLdrEntry(HANDLE remoteProcess, PEB_LDR_DATA ldr, LDR_DATA_TABLE_
 		*ldrEntry = *(PLDR_DATA_TABLE_ENTRY)(ldr.Reserved2[1]);
 }
 
+// Retrieves the name of the DLL from the loader entry
 static PWSTR GetDllName(HANDLE remoteProcess, LDR_DATA_TABLE_ENTRY ldrEntry)
 {
 	PWSTR dllName = (PWSTR)malloc(ldrEntry.FullDllName.MaximumLength);
@@ -100,11 +63,12 @@ static PWSTR GetDllName(HANDLE remoteProcess, LDR_DATA_TABLE_ENTRY ldrEntry)
 	if (remoteProcess != NULL)
 		ReadProcessMemory(remoteProcess, ldrEntry.FullDllName.Buffer, dllName, ldrEntry.FullDllName.MaximumLength, NULL);
 	else
-		dllName = ldrEntry.FullDllName.Buffer;
+		memcpy_s(dllName, ldrEntry.FullDllName.MaximumLength, ldrEntry.FullDllName.Buffer, ldrEntry.FullDllName.MaximumLength);
 
 	return dllName;
 }
 
+// Reads the DLL image base from the file
 static PVOID ReadDllImageBase(HANDLE hFile, DWORD dwFileLen)
 {
 	PVOID pDllImageBase = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, dwFileLen);
@@ -123,11 +87,9 @@ static PVOID ReadDllImageBase(HANDLE hFile, DWORD dwFileLen)
 	return pDllImageBase;
 }
 
-static void SearchHooks(PPEB peb, HANDLE remoteProcess)
+// Searches for hooks in the loaded DLLs
+static void SearchHooks(PPEB peb, HANDLE remoteProcess, LPSUMMARY_TABLE_ROW tableRow, BOOL verbose, BOOL printDisass)
 {
-	PSUMMARY_TABLE summaryTable[MAX_SUMMARY_TABLE_SIZE];
-	DWORD moduleCount = 0;
-
 	PEB_LDR_DATA ldr;
 	ReadLdrData(peb, remoteProcess, &ldr);
 
@@ -144,42 +106,38 @@ static void SearchHooks(PPEB peb, HANDLE remoteProcess)
 		if (ldrEntry.DllBase == NULL)
 			break;
 
-		PSUMMARY_TABLE tableRow = (PSUMMARY_TABLE)malloc(sizeof(SUMMARY_TABLE));
-		if (tableRow == NULL)
-		{
-			wprintf(L"[!] out of memory\n");
-			exit(1);
-		}
-		tableRow->DllFullPath = GetDllName(remoteProcess, ldrEntry);
-		tableRow->HookCount = 0;
+		PWSTR dllName = GetDllName(remoteProcess, ldrEntry);
 
-		summaryTable[moduleCount] = tableRow;
-		moduleCount++;
-
-		wprintf(L"WORKING ON: %s\n", tableRow->DllFullPath);
-		if (_wcsnicmp(tableRow->DllFullPath, SYSTEM_DLL_PATH, wcslen(SYSTEM_DLL_PATH)) != 0)
+		if (_wcsnicmp(dllName, SYSTEM_DLL_PATH, wcslen(SYSTEM_DLL_PATH)) != 0)
 		{
-			printf("not a system library. skipped.\n\n");
-			tableRow->HookCount = -1;
+			print_verbose(verbose, L"[*] %s not a system library. skipped.\n", dllName);
+			free(dllName);
 			continue;
 		}
-		printf("\n");
 
-		HANDLE hFile = CreateFileW(tableRow->DllFullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		HANDLE hFile = CreateFileW(dllName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		if (!hFile || hFile == INVALID_HANDLE_VALUE)
 		{
-			wprintf(L"[!] Failed to open file: %ws. Error: %lu\n", tableRow->DllFullPath, GetLastError());
+			wprintf(L"[!] (PID: %d) Failed to open file: %ws. Error: %lu\n", tableRow->Pid, dllName, GetLastError());
+			free(dllName);
 			continue;
 		}
 		DWORD dwFileLen = GetFileSize(hFile, NULL);
 		if (dwFileLen == INVALID_FILE_SIZE)
 		{
-			DWORD dwError = GetLastError();
-			wprintf(L"[!] Failed to get file size: %ws. Error: %lu\n", tableRow->DllFullPath, dwError);
+			wprintf(L"[!] (PID: %d) Failed to get file size: %ws. Error: %lu\n", tableRow->Pid, dllName, GetLastError());
+			free(dllName);
 			CloseHandle(hFile);
 			continue;  // Skip this DLL and move to the next one
 		}
 		PVOID pDllImageBase = ReadDllImageBase(hFile, dwFileLen);
+		if (pDllImageBase == NULL)
+		{
+			wprintf(L"[!] (PID: %d) Failed to read file %ws. Error: %lu\n", tableRow->Pid, dllName, GetLastError());
+			free(dllName);
+			CloseHandle(hFile);
+			continue;
+		}
 		CloseHandle(hFile);
 
 		// DOS Header
@@ -202,12 +160,15 @@ static void SearchHooks(PPEB peb, HANDLE remoteProcess)
 		// Get Function ordinals array
 		PWORD iOrdinals = RVA2VA(PWORD, pDllImageBase, RvaToFileOffset(ntHeader, exportDirectory->AddressOfNameOrdinals));
 
+		print_verbose(verbose, L"[*] Working on: %s\n", dllName);
+
+		DWORD hookCount = 0;
 		while (numberOfNames > 0)
 		{
 			PCHAR functionName = RVA2VA(PCHAR, pDllImageBase, RvaToFileOffset(ntHeader, iNames[numberOfNames - 1]));
 			DWORD vaFunctionAddress = iFunctions[iOrdinals[numberOfNames - 1]];
 
-			PVOID mFunctionAddress = RVA2VA(PVOID, ldrEntry.DllBase, vaFunctionAddress);			
+			PVOID mFunctionAddress = RVA2VA(PVOID, ldrEntry.DllBase, vaFunctionAddress);
 			if (remoteProcess != NULL) {
 				BYTE mFunctionContent[15];
 				ReadProcessMemory(remoteProcess, mFunctionAddress, mFunctionContent, 15, NULL);
@@ -223,75 +184,169 @@ static void SearchHooks(PPEB peb, HANDLE remoteProcess)
 
 			if (memcmp(mFunctionAddress, iFunctionAddress, 15) != 0) // 15 byte max instruction length
 			{
-				tableRow->HookCount++;
-				printf("\t[*] Function %s HOOKED!\n\n", functionName);
-				printf("\t\tFunction in memory:\n\n");
-				PrintDisasm(mFunctionAddress, 15, vaFunctionAddress);
-				printf("\n\t\tFunction on disk:\n\n");
-				PrintDisasm(iFunctionAddress, 15, vaFunctionAddress);
-				printf("\n");
+				hookCount++;
+				if (printDisass)
+				{
+					printf("\t[+] Function %s HOOKED!\n\n", functionName);
+					wprintf(L"\t\tFunction in memory:\n\n");
+					PrintDisasm(mFunctionAddress, 15, vaFunctionAddress);
+					wprintf(L"\n\t\tFunction on disk:\n\n");
+					PrintDisasm(iFunctionAddress, 15, vaFunctionAddress);
+					wprintf(L"\n");
+				}
 			}
 
 			numberOfNames--;
 		}
 
-		HeapFree(GetProcessHeap(), NULL, pDllImageBase);
-		printf("\n\n");
-	}
+		if (hookCount > 0) {
+			if (!AddSummaryTableRowInfo(tableRow, dllName, hookCount)) {
+				wprintf(L"[!!!] out of memory\n");
+				exit(1);
+			}
+		}
 
-	PrintSummaryTable(summaryTable, moduleCount);
-	for (DWORD i = 0; i < moduleCount; i++) {
-		free(summaryTable[i]);
+		HeapFree(GetProcessHeap(), NULL, pDllImageBase);
 	}
 }
 
-int main(int argc, char* argv[])
+static void SearchHooksInPIDs(DWORD* pids, SIZE_T pidListSize, LPSUMMARY_TABLE table, BOOL verbose, BOOL printDisass)
 {
-	char banner[] = ""
-		"\n|_| _  _ | (~ _  _ _|_ _\n"
-		"| |(_)(_)|<_)(/_| | | |\\/\n"
-		"                      /\nV0.2 - 2024 - @UmaRex01\n\n";
-	printf("%s", banner);
+	HANDLE hProcess;
+	PROCESS_BASIC_INFORMATION processBasicInformation;
+	PEB peb;
 
-	if (argc > 1)
+	for (DWORD count = 0; count < pidListSize; count++)
 	{
-		HANDLE hProcess;
-		PROCESS_BASIC_INFORMATION processBasicInformation;
-		PEB peb;
+		wprintf(L"---\n[*] Working on process %d of %llu with PID: %d\n", count+1, pidListSize, pids[count]);
 
-		int pid = atoi(argv[1]);
-		if (pid == 0) {
-			printf("Invalid PID.\n\n");
-			return 1;
-		}
-
-		printf("[*] Working on process with PID: %d\n\n", pid);
-
-		hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
+		hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pids[count]);
 		if (!hProcess) {
-			printf("Handle on process %d not obtained. Error: %lu\n\n", pid, GetLastError());
-			return 1;
+			wprintf(L"[-] Handle on process %d not obtained. Error: %lu\n", pids[count], GetLastError());
+			continue;
 		}
 
 		if (NtQueryInformationProcess(hProcess, ProcessBasicInformation, &processBasicInformation, sizeof(PROCESS_BASIC_INFORMATION), 0) != 0) {
-			printf("NtQueryInformationProcess call failed.\n\n");
+			wprintf(L"[-] NtQueryInformationProcess call failed.\n");
 			CloseHandle(hProcess);
-			return 1;
+			continue;
 		}
 
 		if (!ReadProcessMemory(hProcess, processBasicInformation.PebBaseAddress, &peb, sizeof(PEB), NULL)) {
-			printf("ReadProcessMemory - Error: %lu.\n\n", GetLastError());
+			wprintf(L"[-] ReadProcessMemory - Error: %lu.\n", GetLastError());
 			CloseHandle(hProcess);
+			continue;
+		}
+
+		LPSUMMARY_TABLE_ROW row = AddSummaryTableRow(table, pids[count]);
+		if (row == NULL) {
+			wprintf(L"[!!!] out of memory\n");
+			exit(1);
+		}
+		SearchHooks(&peb, hProcess, row, verbose, printDisass);
+
+		CloseHandle(hProcess);
+	}
+}
+
+static void PrintUsage()
+{
+	wprintf(L"Usage: HookSentry.exe [-a|-p <PID>|-v]\n");
+	wprintf(L"Options:\n");
+	wprintf(L"\t-h, --help: Show this message\n");
+	wprintf(L"\t-p <PID>, --pid <PID>: Analyze the process with PID <PID>\n");
+	wprintf(L"\t-a, --all: Analyze all active processes\n");
+	wprintf(L"\t-v, --verbose: Enable verbose output\n");
+	wprintf(L"\t-d, --disass: Display disassembled code\n");
+}
+
+int wmain(int argc, wchar_t* argv[])
+{
+	wchar_t banner[] = L""
+		"\n|_| _  _ | (~ _  _ _|_ _\n"
+		"| |(_)(_)|<_)(/_| | | |\\/\n"
+		"                      /\nV0.3 - 2024 - @Umarex\n\n";
+	wprintf(L"%s", banner);
+
+	int pid = 0;
+	BOOL verbose = FALSE;
+	BOOL disass = FALSE;
+	BOOL fullScan = FALSE;
+
+	for (int i = 0; i < argc; i++)
+	{
+		// -h, --help --> Print Usage
+		if (wcscmp(argv[i], L"-h") == 0 || wcscmp(argv[i], L"--help") == 0)
+		{
+			PrintUsage();
 			return 1;
 		}
 
-		SearchHooks(&peb, hProcess);
-		CloseHandle(hProcess);
+		// -p <PID>, --pid <pid> --> Work on specific PID
+		if (wcscmp(argv[i], L"-p") == 0 || wcscmp(argv[i], L"--pid") == 0)
+		{
+			int pid = _wtoi(argv[i + 1]);
+			if (pid == 0) {
+				wprintf(L"Invalid PID.\n\n");
+				PrintUsage();
+				return 1;
+			}
+		}
+
+		// -v, --verbose --> Verbose output
+		if (wcscmp(argv[i], L"-v") == 0 || wcscmp(argv[i], L"--verbose") == 0)
+		{
+			verbose = TRUE;
+		}
+
+		// -a, --all --> Works on all active processes
+		if (wcscmp(argv[i], L"-a") == 0 || wcscmp(argv[i], L"--all") == 0)
+		{
+			fullScan = TRUE;
+		}
+
+		// -d, --disass --> Print disassembled code
+		if (wcscmp(argv[i], L"-d") == 0 || wcscmp(argv[i], L"--disass") == 0)
+		{
+			disass = TRUE;
+		}
 	}
-	else {
-		printf("[*] Working on current process.\n\n");
-		SearchHooks(NtCurrentTeb()->ProcessEnvironmentBlock, NULL);
+
+	SUMMARY_TABLE table;
+	InitSummaryTable(&table);
+
+	if (!fullScan && pid == 0)
+	{
+		wprintf(L"[*] Selected current process.\n");
+
+		DWORD pids[] = { GetCurrentProcessId() };
+		SearchHooksInPIDs(pids, 1, &table, verbose, disass);
 	}
+
+	else if (!fullScan && pid > 0)
+	{
+		DWORD pids[] = { pid };
+		SearchHooksInPIDs(pids, 1, &table, verbose, disass);
+	}
+
+	else if (fullScan)
+	{
+		wprintf(L"[*] Full system scan requested (could take a while)\n");
+
+		DWORD processes[1024], cbNeeded, cbProcesses;
+		if (!EnumProcesses(processes, sizeof(processes), &cbNeeded))
+		{
+			wprintf(L"[-] Failed to enumerate processes.\n");
+			return 1;
+		}
+		cbProcesses = cbNeeded / sizeof(DWORD);
+		wprintf(L"[*] %d active processes found\n", cbProcesses);
+
+		SearchHooksInPIDs(processes, cbProcesses, &table, verbose, disass);
+	}
+
+	PrintFullTable(&table, verbose);
+	FreeSummaryTable(&table);
 
 	return 0;
 }
