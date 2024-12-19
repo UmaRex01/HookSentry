@@ -7,6 +7,13 @@ In addition to scanning individual processes, HookSentry can perform a full scan
 
 **The tool is only compatible with x64 systems.**
 
+## TODO
+HookSentry is still under development! Next steps:
+
+- [x] Perform full system scan
+- [ ] Reduce false positives
+- [ ] Identify jump target
+
 ## Usage
 ```cmd
 C:\Users\user\Desktop>.\HookSentry.exe -h
