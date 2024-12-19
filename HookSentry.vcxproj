@@ -129,7 +129,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CsUtils.cpp" />
     <ClCompile Include="HookSentry.cpp" />
+    <ClCompile Include="SummaryTable.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />
@@ -138,6 +140,10 @@
     <ProjectReference Include="capstone-5.0.3\msvc\capstone_static\capstone_static.vcxproj">
       <Project>{5b01d900-2359-44ca-9914-6b0c6afb7be7}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="CsUtils.h" />
+    <ClInclude Include="SummaryTable.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
