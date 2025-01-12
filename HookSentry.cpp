@@ -281,11 +281,11 @@ int wmain(int argc, wchar_t* argv[])
 			PrintUsage();
 			return 1;
 		}
-
+		
 		// -p <PID>, --pid <pid> --> Work on specific PID
 		if (wcscmp(argv[i], L"-p") == 0 || wcscmp(argv[i], L"--pid") == 0)
 		{
-			int pid = _wtoi(argv[i + 1]);
+			pid = _wtoi(argv[i + 1]); // <----------
 			if (pid == 0) {
 				wprintf(L"Invalid PID.\n\n");
 				PrintUsage();
