@@ -285,14 +285,14 @@ int wmain(int argc, wchar_t* argv[])
 		// -p <PID>, --pid <pid> --> Work on specific PID
 		if (wcscmp(argv[i], L"-p") == 0 || wcscmp(argv[i], L"--pid") == 0)
 		{
-			pid = _wtoi(argv[i + 1]); // <----------
+			pid = _wtoi(argv[i + 1]);
 			if (pid == 0) {
 				wprintf(L"Invalid PID.\n\n");
 				PrintUsage();
 				return 1;
 			}
 		}
-
+		
 		// -v, --verbose --> Verbose output
 		if (wcscmp(argv[i], L"-v") == 0 || wcscmp(argv[i], L"--verbose") == 0)
 		{
