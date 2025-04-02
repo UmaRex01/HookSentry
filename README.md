@@ -1,18 +1,11 @@
 # HookSentry
-HookSentry is a quick & dirty tool for inspecting system DLLs loaded into processes, looking for functions hooked from AV/EDR.
+HookSentry is a simple tool for inspecting system DLLs loaded into processes, looking for functions hooked from AV/EDR.
 
 It scans for potential hooks in system libraries and provides detailed information about each hook it finds. The tool compares the in-memory image of each DLL with its on-disk version, identifies hooked functions, and prints disassembled code to help analyze the changes.
 
-In addition to scanning individual processes, HookSentry can perform a full scan of all active processes on the system. It can also be used to check a specific process or even scan itself for any hooks.
+In addition to scanning a specific process or itself, HookSentry can perform a full scan of all active processes on the system. 
 
-**The tool is only compatible with x64 systems.**
-
-## TODO
-HookSentry is still under development! Next steps:
-
-- [x] Perform full system scan
-- [ ] Reduce false positives
-- [ ] Identify jump target
+**The tool is compatible with x64 systems only.**
 
 ## Usage
 ```cmd
@@ -21,7 +14,7 @@ C:\Users\user\Desktop>.\HookSentry.exe -h
 |_| _  _ | (~ _  _ _|_ _
 | |(_)(_)|<_)(/_| | | |\/
                       /
-V0.3 - 2024 - @Umarex
+V0.4 - @Umarex
 
 Usage: HookSentry.exe [-a|-p <PID>|-v]
 Options:
@@ -39,7 +32,7 @@ C:\Users\user\Desktop>.\HookSentry.exe -v -d
 |_| _  _ | (~ _  _ _|_ _
 | |(_)(_)|<_)(/_| | | |\/
                       /
-V0.3 - 2024 - @Umarex
+V0.4 - @Umarex
 
 [*] Selected current process.
 ---
@@ -74,3 +67,11 @@ V0.3 - 2024 - @Umarex
         C:\Windows\System32\KERNEL32.DLL contains 8 hooks
         C:\Windows\System32\KERNELBASE.dll contains 45 hooks
 ```
+
+## Run HookSentry as Beacon Object File (BOF)
+It is also possible to run HookSentry as BOF. The **HookSentryBOF** project is a slightly modified version of the original one, which allows to run the tool as BOF with the following limitations:
+- cannot perform full system scan
+- cannot display disassembled info
+- must be run with target PID as mandatory argument
+
+**Please note!** HookSentryBOF has not been fully tested against any C2 framework, but only against the [COFFLoader](https://github.com/trustedsec/COFFLoader) project.
