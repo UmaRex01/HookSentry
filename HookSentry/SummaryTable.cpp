@@ -1,5 +1,5 @@
+#include <wchar.h>
 #include "SummaryTable.h"
-#include <stdio.h>
 
 void InitSummaryTable(LPSUMMARY_TABLE lpSummaryTable)
 {
@@ -56,23 +56,22 @@ BOOL AddSummaryTableRowInfo(LPSUMMARY_TABLE_ROW lpSummaryTableRow, PWSTR pszDllF
 	return TRUE;
 }
 
-void PrintFullTable(LPSUMMARY_TABLE lpSummaryTable, BOOL verbose)
+void PrintFullTable(LPSUMMARY_TABLE lpSummaryTable)
 {
 	wprintf(L"\n\n*** SUMMARY ***\n\n");
 	for (DWORD i = 0; i < lpSummaryTable->RowsCount; i++)
 	{
 		LPSUMMARY_TABLE_ROW row = &lpSummaryTable->Rows[i];
 		wprintf(L"%ws PID: %d has %d hooked functions\n", (row->TotalHooks > 0 ? L"[+]" : L"[-]"), row->Pid, row->TotalHooks);
-		if (verbose)
+
+		for (DWORD k = 0; k < row->DllsCount; k++)
 		{
-			for (DWORD k = 0; k < row->DllsCount; k++)
-			{
-				LPDLL_INFO dllInfo = &row->DllInfos[k];
-				if (dllInfo->HooksCount == -1)
-					wprintf(L"\t%s skipped.\n", dllInfo->DllFullPath);
-				else
-					wprintf(L"\t%s contains %d hooks\n", dllInfo->DllFullPath, dllInfo->HooksCount);
-			}
+			LPDLL_INFO dllInfo = &row->DllInfos[k];
+			if (dllInfo->HooksCount == -1)
+				wprintf(L"\t%s skipped.\n", dllInfo->DllFullPath);
+			else
+				wprintf(L"\t%s contains %d hooks\n", dllInfo->DllFullPath, dllInfo->HooksCount);
 		}
+
 	}
 }
