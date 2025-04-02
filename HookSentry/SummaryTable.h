@@ -22,4 +22,4 @@ void InitSummaryTable(LPSUMMARY_TABLE lpSummaryTable);
 void FreeSummaryTable(LPSUMMARY_TABLE lpSummaryTable);
 LPSUMMARY_TABLE_ROW AddSummaryTableRow(LPSUMMARY_TABLE lpSummaryTable, DWORD dwPid);
 BOOL AddSummaryTableRowInfo(LPSUMMARY_TABLE_ROW lpSummaryTableRow, PWSTR pszDllFullPath, DWORD dwHooksCount);
-void PrintFullTable(LPSUMMARY_TABLE lpSummaryTable, BOOL verbose);
+void PrintFullTable(LPSUMMARY_TABLE lpSummaryTable);

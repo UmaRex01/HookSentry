@@ -1,4 +1,7 @@
 #include "CsUtils.h"
+#include <stdio.h>
+
+#ifdef _CS_ENABLED
 #include <capstone.h>
 
 #pragma comment(lib, "capstone.lib")
@@ -33,3 +36,9 @@ void PrintDisasm(PVOID startAddr, SIZE_T size, DWORD64 vaAddr)
 
 	cs_close(&csHandle);
 }
+#else
+void PrintDisasm(PVOID startAddr, SIZE_T size, DWORD64 vaAddr)
+{
+	printf("\t\t(ERROR: CAPSTONE MODULE NOT ENABLED)\n\n\t\t");
+}
+#endif

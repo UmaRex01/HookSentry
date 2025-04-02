@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="File di intestazione\capstone_utils">
+      <UniqueIdentifier>{08e5e1fd-be2e-4b44-aeae-d36e1ebec123}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="File di origine\capstone_utils">
+      <UniqueIdentifier>{d0209bcc-90d9-43c3-a968-d2c010dff240}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="HookSentry.cpp">
@@ -21,8 +27,11 @@
     <ClCompile Include="SummaryTable.cpp">
       <Filter>File di origine</Filter>
     </ClCompile>
-    <ClCompile Include="CsUtils.cpp">
+    <ClCompile Include="Main.cpp">
       <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="CsUtils.cpp">
+      <Filter>File di origine\capstone_utils</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -32,8 +41,11 @@
     <ClInclude Include="SummaryTable.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
-    <ClInclude Include="CsUtils.h">
+    <ClInclude Include="HookSentry.h">
       <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="CsUtils.h">
+      <Filter>File di intestazione\capstone_utils</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
