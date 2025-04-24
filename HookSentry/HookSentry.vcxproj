@@ -143,9 +143,9 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="HookSentry.cpp" />
-    <ClCompile Include="Main.cpp" />
-    <ClCompile Include="SummaryTable.cpp" />
+    <ClCompile Include="HookSentry.c" />
+    <ClCompile Include="Main.c" />
+    <ClCompile Include="SummaryTable.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" />

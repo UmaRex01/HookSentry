@@ -21,13 +21,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="HookSentry.cpp">
+    <ClCompile Include="HookSentry.c">
       <Filter>File di origine</Filter>
     </ClCompile>
-    <ClCompile Include="SummaryTable.cpp">
+    <ClCompile Include="SummaryTable.c">
       <Filter>File di origine</Filter>
     </ClCompile>
-    <ClCompile Include="Main.cpp">
+    <ClCompile Include="Main.c">
       <Filter>File di origine</Filter>
     </ClCompile>
     <ClCompile Include="CsUtils.cpp">
